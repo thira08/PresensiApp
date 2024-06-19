@@ -2,16 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:table_calendar/table_calendar.dart';
 
-class AttandanceRecapScreen extends StatefulWidget {
-  const AttandanceRecapScreen({super.key});
+class RecapScreen extends StatefulWidget {
+  const RecapScreen({super.key});
 
   @override
-  State<AttandanceRecapScreen> createState() {
+  State<RecapScreen> createState() {
     return _AttandanceRecapSreenApp();
   }
 }
 
-class _AttandanceRecapSreenApp extends State<AttandanceRecapScreen> {
+class _AttandanceRecapSreenApp extends State<RecapScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(

@@ -17,9 +17,8 @@ class Dashboard extends StatefulWidget {
 
 class _DashboardState extends State<Dashboard> {
   String nik = "", token = "", name = "", dept = "", imgUrl = "";
-  late Future<Presensi> futurePresensi;
+  bool isMasuk = true;
 
-  //get user data
   Future<void> getUserData() async {
     final prefs = await SharedPreferences.getInstance();
     String? nik = prefs.getString('nik') ?? "";
@@ -37,7 +36,6 @@ class _DashboardState extends State<Dashboard> {
     });
   }
 
-  //get presence info
   Future<Presensi> fetchPresensi(String nik, String tanggal) async {
     String url =
         'https://presensi.spilme.id/presence?nik=$nik&tanggal=$tanggal';
@@ -47,7 +45,6 @@ class _DashboardState extends State<Dashboard> {
     if (response.statusCode == 200) {
       return Presensi.fromJson(jsonDecode(response.body));
     } else {
-      //jika data tidak tersedia, buat data default
       return Presensi(
         id: 0,
         nik: this.nik,
@@ -61,10 +58,71 @@ class _DashboardState extends State<Dashboard> {
     }
   }
 
+  Future<void> saveStatusMasuk() async {
+    final prefs = await SharedPreferences.getInstance();
+    prefs.setBool('isMasuk', isMasuk);
+  }
+
+  Future<void> loadStatusMasuk() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      isMasuk = prefs.getBool('isMasuk') ?? true;
+    });
+  }
+
+  Future<void> recordAttendance() async {
+    Navigator.pop(context);
+    //end point
+    const String endpointMasuk = 'https://presensi.spilme.id/entry';
+    const String endpointKeluar = 'https://presensi.spilme.id/exit';
+
+    final endpoint = isMasuk ? endpointMasuk : endpointKeluar;
+    final requestBody = isMasuk
+        ? {
+            'nik': nik,
+            'tanggal': getTodayDate(),
+            'jam_masuk': getTime(),
+            'lokasi_masuk': 'polbeng',
+          }
+        : {
+            'nik': nik,
+            'tanggal': getTodayDate(),
+            'jam_keluar': getTime(),
+            'lokasi_keluar': 'polbeng',
+          };
+
+    final response = await http.post(
+      Uri.parse(endpoint),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(requestBody),
+    );
+
+    if (response.statusCode == 200) {
+      final responseBody = jsonDecode(response.body);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(responseBody['message'])),
+      );
+      setState(() {
+        isMasuk = !isMasuk;
+        saveStatusMasuk(); // simpan status absensi
+      });
+      //refresh informasi absensi
+      fetchPresensi(nik, getTodayDate());
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to record attendance')),
+      );
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     getUserData();
+    loadStatusMasuk();
   }
 
   @override
@@ -79,7 +137,6 @@ class _DashboardState extends State<Dashboard> {
             const SizedBox(
               height: 24,
             ),
-            //Greetings
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -155,7 +212,7 @@ class _DashboardState extends State<Dashboard> {
                   onTap: () {
                     Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (context) => const AttandanceRecapScreen(),
+                        builder: (context) => RecapScreen(),
                       ),
                     );
                   },
@@ -188,9 +245,8 @@ class _DashboardState extends State<Dashboard> {
                           shape: RoundedRectangleBorder(
                             side: const BorderSide(
                                 color: Color.fromARGB(255, 219, 226, 228),
-                                width: 1.0), // Gray border for the Card
-                            borderRadius:
-                                BorderRadius.circular(10.0), // Rounded corners
+                                width: 1.0),
+                            borderRadius: BorderRadius.circular(10.0),
                           ),
                           color: Colors.white,
                           child: Padding(
@@ -210,7 +266,7 @@ class _DashboardState extends State<Dashboard> {
                                           borderRadius:
                                               BorderRadius.circular(10)),
                                       child: SvgPicture.asset(
-                                          'assets/svgs/login_outlined.svg'),
+                                          'assets/images/login.svg'),
                                     ),
                                     const SizedBox(
                                       width: 10,
@@ -254,12 +310,10 @@ class _DashboardState extends State<Dashboard> {
                           shape: RoundedRectangleBorder(
                             side: const BorderSide(
                                 color: Color.fromARGB(255, 219, 226, 228),
-                                width: 1.0), // Gray border for the Card
-                            borderRadius:
-                                BorderRadius.circular(10.0), // Rounded corners
+                                width: 1.0),
+                            borderRadius: BorderRadius.circular(10.0),
                           ),
-                          color: Colors
-                              .white, // White background color for the Card
+                          color: Colors.white,
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Column(
@@ -277,7 +331,7 @@ class _DashboardState extends State<Dashboard> {
                                           borderRadius:
                                               BorderRadius.circular(10)),
                                       child: SvgPicture.asset(
-                                        'assets/svgs/logout_outlined.svg',
+                                        'assets/images/logout.svg',
                                       ),
                                     ),
                                     const SizedBox(
@@ -335,28 +389,28 @@ class _DashboardState extends State<Dashboard> {
                 );
               },
               style: ElevatedButton.styleFrom(
-                  minimumSize:
-                      const Size(double.infinity, 50), // width and height
+                  minimumSize: const Size(double.infinity, 50),
                   backgroundColor: const Color(0xFF12A3DA),
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
                   )),
               child: Row(
-                mainAxisSize: MainAxisSize
-                    .min, // Use min to prevent the Row from expanding
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Icon(
-                    Icons
-                        .circle_outlined, // This is the icon you want before the text
-                    color: Colors.white, // Icon color
-                    size: 24.0, // Icon size
+                    Icons.circle_outlined,
+                    color: Colors.white,
+                    size: 24.0,
                   ),
-                  const SizedBox(width: 8), // Spacing between icon and text
+                  const SizedBox(width: 8),
+                  SizedBox(width: 5),
                   Text(
-                    'Tekan untuk presensi keluar',
-                    style: GoogleFonts.manrope(
-                        fontSize: 20, fontWeight: FontWeight.bold),
+                    'Tekan untuk presensi ${isMasuk ? 'masuk' : 'pulang'}',
+                    style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15),
                   ),
                 ],
               ),
@@ -365,127 +419,191 @@ class _DashboardState extends State<Dashboard> {
               height: 10,
             ),
             Row(
-              children: [
-                Expanded(
-                  child: Card(
-                    clipBehavior: Clip.antiAlias,
-                    shape: RoundedRectangleBorder(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                Container(
+                  width: 150,
+                  height: 190,
+                  decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage('assets/images/bg_izin.png'),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.black,
+                          Colors.grey,
+                          Colors.grey,
+                          Colors.grey,
+                          Colors.black,
+                        ],
+                      )),
+                  child: Padding(
+                    padding: EdgeInsets.all(13.0),
+                    child: Column(
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
                             Text(
-                              'Izin Absen',
-                              style: GoogleFonts.manrope(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(
-                              height: 10,
-                            ),
-                            Text(
-                              'Isi form untuk mengajukan izin absensi',
-                              style: GoogleFonts.manrope(
-                                fontSize: 14,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-                            ElevatedButton(
-                              onPressed: () {},
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: const Color(0xff313638),
-                                  minimumSize: const Size(double.infinity, 50),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  )),
-                              child: Text(
-                                'Ajukan izin',
-                                style: GoogleFonts.manrope(
-                                  fontSize: 16,
+                              "Izin Absen",
+                              style: TextStyle(
+                                  fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                ),
+                                  color: Colors.white),
+                            )
+                          ],
+                        ),
+                        SizedBox(
+                          height: 5,
+                        ),
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    "Isi form untuk meminta izin absen",
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.white),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                      ),
+                        SizedBox(
+                          height: 50,
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            Container(
+                              width: 120,
+                              child: Column(
+                                children: <Widget>[
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 10, vertical: 10),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: () {},
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: <Widget>[
+                                        Text(
+                                          "Ajukan Izin",
+                                          style: TextStyle(
+                                              color: Colors.black,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15),
+                                        )
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
-                const SizedBox(
-                  width: 10,
-                ),
-                Expanded(
-                  child: Card(
-                    clipBehavior: Clip.antiAlias,
-                    shape: RoundedRectangleBorder(
+                Container(
+                  width: 150,
+                  height: 190,
+                  decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Container(
-                      decoration: const BoxDecoration(
-                        image: DecorationImage(
-                          image: AssetImage('assets/images/bg_cuti.png'),
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Colors.purple,
+                          Colors.purpleAccent,
+                          Colors.purpleAccent,
+                          Colors.purpleAccent,
+                          Colors.purple,
+                        ],
+                      )),
+                  child: Padding(
+                    padding: EdgeInsets.all(10.0),
+                    child: Column(
+                      children: <Widget>[
+                        Row(
+                          children: <Widget>[
                             Text(
-                              'Izin Cuti',
-                              style: GoogleFonts.manrope(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(
-                              height: 10,
-                            ),
-                            Text(
-                              'Isi form untuk mengajukan cuti',
-                              style: GoogleFonts.manrope(
-                                fontSize: 14,
-                                color: Colors.white,
-                              ),
-                            ),
-                            const SizedBox(height: 40),
-                            ElevatedButton(
-                              onPressed: () {},
-                              style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.white,
-                                  foregroundColor: const Color(0xff9B59B6),
-                                  minimumSize: const Size(double.infinity, 50),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  )),
-                              child: Text(
-                                'Ajukan Cuti',
-                                style: GoogleFonts.manrope(
-                                  fontSize: 16,
+                              "Ajukan Cuti",
+                              style: TextStyle(
+                                  fontSize: 18,
                                   fontWeight: FontWeight.bold,
-                                ),
+                                  color: Colors.white),
+                            )
+                          ],
+                        ),
+                        SizedBox(
+                          height: 5,
+                        ),
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    "Isi form untuk mengajukan cuti",
+                                    style: TextStyle(
+                                        fontSize: 12, color: Colors.white),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
-                      ),
+                        SizedBox(
+                          height: 50,
+                        ),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: <Widget>[
+                            Container(
+                              width: 120,
+                              child: Column(
+                                children: <Widget>[
+                                  ElevatedButton(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      padding: EdgeInsets.symmetric(
+                                          horizontal: 8, vertical: 10),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8)),
+                                    ),
+                                    onPressed: () {},
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: <Widget>[
+                                        Text(
+                                          "Ajukan Cuti",
+                                          style: TextStyle(
+                                              color: Colors.purple,
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15),
+                                        )
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -504,7 +622,7 @@ class _DashboardState extends State<Dashboard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Presensi Masuk',
+            Text('Presensi ${isMasuk ? 'Masuk' : 'Pulang'}',
                 style: GoogleFonts.manrope(
                   fontSize: 24,
                   color: Colors.black,
@@ -526,13 +644,13 @@ class _DashboardState extends State<Dashboard> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Tanggal Masuk',
+                    Text('Tanggal ${isMasuk ? 'Masuk' : 'Pulang'}',
                         style: GoogleFonts.manrope(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: const Color(0xff111111),
                         )),
-                    Text('Selasa, 23 Agustus 2023',
+                    Text(getToday(),
                         style: GoogleFonts.manrope(
                           fontSize: 14,
                           color: const Color(0xff707070),
@@ -557,13 +675,13 @@ class _DashboardState extends State<Dashboard> {
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Jam Masuk',
+                    Text('Jam ${isMasuk ? 'Masuk' : 'Pulang'}',
                         style: GoogleFonts.manrope(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
                           color: const Color(0xff111111),
                         )),
-                    Text('07:30:23',
+                    Text(getTime(),
                         style: GoogleFonts.manrope(
                           fontSize: 14,
                           color: const Color(0xff707070),
@@ -601,16 +719,14 @@ class _DashboardState extends State<Dashboard> {
             ),
             const SizedBox(height: 16),
             ElevatedButton(
-              onPressed: () {
-                // Implement your check-in logic
-              },
+              onPressed: recordAttendance,
               style: ElevatedButton.styleFrom(
                 minimumSize: const Size(double.infinity, 50),
                 backgroundColor: Colors.blue,
                 foregroundColor: Colors.white,
               ),
               child: Text(
-                'Hadir',
+                'Simpan',
                 style: GoogleFonts.manrope(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
